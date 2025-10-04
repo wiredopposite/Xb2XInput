@@ -49,9 +49,17 @@ std::vector<std::pair<int, int>> xbox_devices =
   {0x0F30, 0x8888}, // BigBen XBMiniPad Controller
   {0x102C, 0xFF0C}, // Joytech Wireless Advanced Controller
   {0xFFFF, 0xFFFF}, // PowerWave Xbox Controller (The ID's may look sketchy but this controller actually uses it)
+  {0xCafe, 0x4005}, // 8BitGeist XAdapter
+};
+
+std::vector<USBInterfaceClass> xbox_interface_classes = {
+  {XID_ITF_CLASS, XID_ITF_SUBCLASS, XID_ITF_PROTOCOL},
 };
 
 UserSettings defaults_;
+
+// Global setting for interface class fallback
+bool enable_interface_class_fallback = false;
 
 // Xb2XInput.cpp externs
 void USBDeviceChanged(const XboxController& controller, bool added);
@@ -91,6 +99,80 @@ std::mutex controller_mutex_;
 std::mutex usb_mutex_;
 std::mutex vigem_alloc_mutex_;
 
+// Helper function to check if device matches any supported interface class
+bool CheckInterfaceClass(libusb_device* dev)
+{
+  struct libusb_config_descriptor *conf_desc;
+  if (libusb_get_config_descriptor(dev, 0, &conf_desc) != 0)
+    return false;
+  
+  bool found = false;
+  int nb_ifaces = conf_desc->bNumInterfaces;
+  
+  for (int i = 0; i < nb_ifaces && !found; i++)
+  {
+    for (int j = 0; j < conf_desc->interface[i].num_altsetting && !found; j++)
+    {
+      auto& iface = conf_desc->interface[i].altsetting[j];
+      
+      // Check against our supported interface classes
+      for (auto& xbox_iface : xbox_interface_classes)
+      {
+        if (iface.bInterfaceClass == xbox_iface.bInterfaceClass &&
+            iface.bInterfaceSubClass == xbox_iface.bInterfaceSubClass &&
+            iface.bInterfaceProtocol == xbox_iface.bInterfaceProtocol)
+        {
+          // Additional validation: check if it has interrupt endpoints (typical for game controllers)
+          bool has_interrupt_in = false;
+          bool has_interrupt_out = false;
+          
+          for (int k = 0; k < iface.bNumEndpoints; k++)
+          {
+            auto& endpoint = iface.endpoint[k];
+            if ((endpoint.bmAttributes & LIBUSB_TRANSFER_TYPE_MASK) == LIBUSB_TRANSFER_TYPE_INTERRUPT)
+            {
+              if (endpoint.bEndpointAddress & LIBUSB_ENDPOINT_IN)
+                has_interrupt_in = true;
+              else
+                has_interrupt_out = true;
+            }
+          }
+          
+          // For HID class devices, we typically need at least an interrupt IN endpoint
+          if (iface.bInterfaceClass == 0x03 && has_interrupt_in)
+          {
+            found = true;
+            break;
+          }
+          // For other classes, we might have different requirements
+          else if (iface.bInterfaceClass != 0x03)
+          {
+            found = true;
+            break;
+          }
+        }
+      }
+    }
+  }
+  
+  libusb_free_config_descriptor(conf_desc);
+  return found;
+}
+
+// Helper function to load global settings
+void LoadGlobalSettings()
+{
+  // Load interface class fallback setting from [Global] section
+  int fallback_enabled = GetPrivateProfileIntA("Global", "EnableInterfaceClassFallback", 0, ini_path);
+  enable_interface_class_fallback = (fallback_enabled != 0);
+  
+  // Write default setting if it doesn't exist
+  if (fallback_enabled == 0)
+  {
+    WritePrivateProfileStringA("Global", "EnableInterfaceClassFallback", "false", ini_path);
+  }
+}
+
 libusb_device_handle* XboxController::OpenDevice()
 {
   libusb_device_handle* ret = nullptr;
@@ -104,6 +186,8 @@ libusb_device_handle* XboxController::OpenDevice()
     libusb_get_device_descriptor(devs[i], &desc);
 
     bool found = false;
+    
+    // First, try to match by VID/PID
     for (auto device : xbox_devices)
     {
       if (desc.idVendor == device.first && desc.idProduct == device.second)
@@ -112,6 +196,18 @@ libusb_device_handle* XboxController::OpenDevice()
         break;
       }
     }
+    
+    // If no VID/PID match found, try interface class/subclass/protocol fallback
+    if (!found && enable_interface_class_fallback)
+    {
+      found = CheckInterfaceClass(devs[i]);
+      if (found)
+      {
+        dbgprintf("XboxController: Found device by interface class - VID:0x%04X PID:0x%04X\n", 
+                  desc.idVendor, desc.idProduct);
+      }
+    }
+    
     if (!found)
       continue;
 
@@ -225,6 +321,9 @@ bool XboxController::Initialize(WCHAR* app_title)
   defaults_.remap_enabled = false;
 
   defaults_ = LoadSettings("Default", defaults_);
+  
+  // Load global settings
+  LoadGlobalSettings();
 
   // Init libusb & ViGEm
   auto ret = libusb_init(NULL);
@@ -505,7 +604,15 @@ bool XboxController::update()
     extern int poll_ms;
     ret = libusb_interrupt_transfer(usb_handle_, endpoint_in_, (unsigned char*)&input_prev_, sizeof(XboxInputReport), &length, poll_ms);
     if (ret < 0)
-      return true; // No input available atm
+    {
+      // Check if this is a timeout (device still connected but no data) vs disconnection
+      if (ret == LIBUSB_ERROR_TIMEOUT)
+        return true; // No input available atm, but device still connected
+      
+      // Other errors likely indicate device disconnection
+      dbgprintf(__FUNCTION__ ": libusb interrupt transfer failed (code %d)", ret);
+      return false;
+    }
   }
   else
   {

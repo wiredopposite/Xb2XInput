@@ -7,6 +7,10 @@
 #include <mutex>
 #include <unordered_map>
 
+#define XID_ITF_CLASS     0x58
+#define XID_ITF_SUBCLASS  0x42
+#define XID_ITF_PROTOCOL  0x00
+
 // original xbox XINPUT definitions from https://github.com/paralin/hl2sdk/blob/master/common/xbox/xboxstubs.h
 
 // digital button bitmasks
@@ -81,6 +85,12 @@ struct UserSettings {
 
   std::unordered_map<int, int> button_remap;
   bool remap_enabled = false;
+};
+
+struct USBInterfaceClass {
+  uint8_t bInterfaceClass;
+  uint8_t bInterfaceSubClass;
+  uint8_t bInterfaceProtocol;
 };
 
 #pragma pack(pop)

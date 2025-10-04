@@ -1,0 +1,100 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "shell",
+            "label": "Build Debug x64",
+            "command": "msbuild",
+            "args": [
+                "${workspaceFolder}/Xb2XInput.sln",
+                "/p:Configuration=Debug",
+                "/p:Platform=x64",
+                "/v:minimal"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "type": "shell",
+            "label": "Build Release x64",
+            "command": "msbuild",
+            "args": [
+                "${workspaceFolder}/Xb2XInput.sln",
+                "/p:Configuration=Release",
+                "/p:Platform=x64",
+                "/v:minimal"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "type": "shell",
+            "label": "Build Debug Win32",
+            "command": "msbuild",
+            "args": [
+                "${workspaceFolder}/Xb2XInput.sln",
+                "/p:Configuration=Debug",
+                "/p:Platform=Win32",
+                "/v:minimal"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "type": "shell",
+            "label": "Build Release Win32",
+            "command": "msbuild",
+            "args": [
+                "${workspaceFolder}/Xb2XInput.sln",
+                "/p:Configuration=Release",
+                "/p:Platform=Win32",
+                "/v:minimal"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "type": "shell",
+            "label": "Clean",
+            "command": "msbuild",
+            "args": [
+                "${workspaceFolder}/Xb2XInput.sln",
+                "/t:Clean"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        }
+    ]
+}
