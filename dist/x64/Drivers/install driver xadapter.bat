@@ -17,7 +17,7 @@ if %errorLevel% neq 0 (
 cd %~dp0
 
 echo Installing WinUSB drivers for known gamepads (this might take a minute or two)
-wdi-simple --vid 0xCafe --pid 0x4005 --iid 0 --type 0 --name "8BitGeist XAdapter XID"
+wdi-simple --vid 0xCafe --pid 0x4005 --type 0 --name "8BitGeist XAdapter XID"
 
 echo Driver installation complete!
 :exit
